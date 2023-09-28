@@ -23,8 +23,8 @@ text {
   font-size: 10px;
 }
 </style>
-<div id="visualDiv">
-    <svg width="960" height="600"></svg>
+<div id="visualDiv" text-align="center">
+    <svg width="960" height="600" style="margin-left:auto; margin-right:auto; display:block;"></svg>
 </div>
 <script src="https://d3js.org/d3.v4.min.js"></script>
 
@@ -131,7 +131,7 @@ text {
             .on("click", function(d) {
                 d3.select('svg').remove();
                 var newSvg = document.getElementById("visualDiv");
-                newSvg.outerHTML += '<svg width="960" height="600">';
+                newSvg.outerHTML += '<svg width="960" height="600" style="margin-left:auto; margin-right:auto; display:block;">';
                 toggle_children(graph, d);
                 update_links(graph);
                 fd_graph(graph);
