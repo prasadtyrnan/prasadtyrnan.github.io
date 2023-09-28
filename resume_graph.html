@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<head>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.12.9/dist/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+</head>
+<style>
+
+.links line {
+  stroke: #999;
+  stroke-opacity: 0.6;
+}
+
+.nodes circle {
+  stroke: #fff;
+  stroke-width: 1.5px;
+}
+
+text {
+  font-family: sans-serif;
+  font-size: 10px;
+}
+</style>
+<div id="visualDiv">
+    <svg width="960" height="600"></svg>
+</div>
+<script src="https://d3js.org/d3.v4.min.js"></script>
+
+<script>
+    function fd_graph(graph) {
+        var mouse_x = null;
+        var mouse_y = null;
+
+        document.addEventListener('mousemove', onMouseUpdate, false);
+        document.addEventListener('mouseenter', onMouseUpdate, false);
+        
+        function onMouseUpdate(e) {
+            mouse_x = e.pageX;
+            mouse_y = e.pageY;
+        }
+
+        var svg = d3.select("svg"),
+        width = +svg.attr("width"),
+        height = +svg.attr("height");
+
+        var color = d3.scaleOrdinal(d3.schemeCategory20);
+
+        function toggle_children(graph, parent) {
+            for (let i = 0; i < graph.nodes.length; i++){
+                if (graph.nodes[i].parent == parent.id) {
+                    graph.nodes[i].active = Math.abs(graph.nodes[i].active - 1);
+                    if (parent.active == 0){
+                        graph.nodes[i].active = 0;
+                    }
+                    if (graph.nodes[i].active == 0) {
+                        toggle_children(graph, graph.nodes[i]);
+                    }
+                }
+            }
+        } 
+        function update_links(graph) {
+            for (let i = 0; i < graph.links.length; i++) {
+                if (graph.links[i].source.active == 0 || graph.links[i].target.active == 0) {
+                    graph.links[i].active = 0;
+                } else {
+                    graph.links[i].active = 1;
+                }
+            }
+        }
+
+        var simulation = d3.forceSimulation()
+            .force("link", d3.forceLink().id(function(d) { return d.id; }))
+            .force("charge", d3.forceManyBody().strength(d => -100 * d.active))
+            .force("center", d3.forceCenter(width / 2, height / 2));
+
+        var link = svg.append("g")
+            .attr("class", "links")
+            .selectAll("line")
+            .data(graph.links)
+            .enter().append("line")
+            .attr("stroke-width", function(d) { 
+                return 1.5 * d.active 
+            });
+
+        tooltip = d3
+            .select("body")
+            .append("div") // the tooltip always "exists" as its own html div, even when not visible
+            .style("position", "absolute") // the absolute position is necessary so that we can manually define its position later
+            .style("visibility", "hidden") // hide it from default at the start so it only appears on hover
+            .style("background-color", "white")
+            .attr("class", "card")
+
+        tooltip_in = function(d) { // pass event and d to this function so that it can access d for our data
+            if (d.text == ""){
+                return tooltip
+            } else {
+                return tooltip
+                    .html("<div class='card-header'>" + d.id + "</div><p class='card-text' style='margin-left:10px; margin-right:10px;'>" + d.text + "</p>")
+                    .style("visibility", "visible")
+                    .style("top", mouse_y + "px") // position the tooltip with its top at the same pixel location as the mouse on the screen
+                    .style("left", mouse_x + "px");
+            }
+            return tooltip
+                .html("<h4>" + d.text + "</h4>") // add an html element with a header tag containing the name of the node.  This line is where you would add additional information like: "<h4>" + d.name + "</h4></br><p>" + d.type + "</p>"  Note the quote marks, pluses and </br>--these are necessary for javascript to put all the data and strings within quotes together properly.  Any text needs to be all one line in .html() here
+                .style("visibility", "visible") // make the tooltip visible on hover
+                .style("top", mouse_y + "px") // position the tooltip with its top at the same pixel location as the mouse on the screen
+                .style("left", mouse_x + "px"); // position the tooltip just to the right of the mouse location
+        }
+        
+            // name a tooltip_out function to call when the mouse stops hovering
+        tooltip_out = function() {
+            return tooltip
+                .transition()
+                .duration(1) // give the hide behavior a 50 milisecond delay so that it doesn't jump around as the network moves
+                .style("visibility", "hidden"); // hide the tooltip when the mouse stops hovering
+        }
+
+        var node = svg.append("g")
+            .attr("class", "nodes")
+            .selectAll("g")
+            .data(graph.nodes)
+            .enter().append("g")
+            .on("mouseover", tooltip_in)
+            .on("mouseout", tooltip_out)
+
+        var circles = node.append("circle")
+            .attr("r", d => (20 - d.generation * 2) * d.active)
+            .attr("fill", function(d) { return color(d.generation); })
+            .on("click", function(d) {
+                d3.select('svg').remove();
+                var newSvg = document.getElementById("visualDiv");
+                newSvg.outerHTML += '<svg width="960" height="600">';
+                toggle_children(graph, d);
+                update_links(graph);
+                fd_graph(graph);
+            });
+
+        // Create a drag handler and append it to the node object instead
+        var drag_handler = d3.drag()
+            .on("start", dragstarted)
+            .on("drag", dragged)
+            .on("end", dragended);
+
+        drag_handler(node);
+    
+        var labels = node.append("text")
+            .text(function(d) {
+                return d.id;
+            })
+            .attr('x', d => 0)
+            .attr('y', d => 1)
+            .attr("text-anchor", "middle")
+            .attr("fill", "gray")
+            .attr("stroke", "white")
+            .attr("stroke-width", ".1px")
+            .attr("vector-effect", "non-scaling-stroke")
+            .style('font-size', d => (.75 * d.active) + 'em')
+            .style('pointer-events', 'none');
+
+        simulation
+            .nodes(graph.nodes)
+            .on("tick", ticked);
+
+        simulation.force("link")
+            .links(graph.links);
+
+        function ticked() {
+            link
+                .attr("x1", function(d) { return d.source.x; })
+                .attr("y1", function(d) { return d.source.y; })
+                .attr("x2", function(d) { return d.target.x; })
+                .attr("y2", function(d) { return d.target.y; });
+
+            node
+                .attr("transform", function(d) {
+                return "translate(" + d.x + "," + d.y + ")";
+                })
+        };
+
+        function dragstarted(d) {
+            if (!d3.event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+                tooltip_in(d);
+        }
+
+        function dragged(d) {
+            d.fx = d3.event.x;
+            d.fy = d3.event.y;
+        }
+
+        function dragended(d) {
+            if (!d3.event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+            tooltip_out();
+        }
+    }
+</script>
+
+<script>
+    graph = ({
+        nodes: [
+            ({id: "Tyrnan Prasad", parent: "none", generation: 0, active : 1, text: "Click to Expand"}),
+            ({id: "Contact Information", parent: "Tyrnan Prasad", generation: 1, active: 0, text: ""}),
+            ({id: "Education", parent: "Tyrnan Prasad", generation: 1, active: 0, text: ""}),
+            ({id: "Skills", parent: "Tyrnan Prasad", generation: 1, active: 0, text: ""}),
+            ({id: "Work Experience", parent: "Tyrnan Prasad", generation: 1, active: 0, text: ""}),
+            ({id: "Phone Number", parent: "Contact Information", generation: 1, active: 0, text: "804-836-6237"}),
+            ({id: "E-Mail Address", parent: "Contact Information", generation: 1, active: 0, text: "prasadtyrnan@gmail.com"}),
+            ({id: "University of Virginia", parent: "Education", generation: 1, active: 0, text: "2018-2021<br> - BA Computer Science<br> - BA Mathematics<br> - GPA: 3.6"}),
+            ({id: "University of California, Berkeley", parent: "Education", generation: 1, active: 0, text: "2022-2024 (expected)<br> - MI Data Science<br> - GPA: 4.0"}),
+            ({id: "Languages, Libraries, and Frameworks", parent: "Skills", generation: 1, active: 0, text: ""}),
+            ({id: "Concepts", parent: "Skills", generation: 1, active: 0, text: ""}),
+            ({id: "Javascript", parent: "Languages, Libraries, and Frameworks", generation: 2, active: 0, text: ""}),
+            ({id: "Python", parent: "Languages, Libraries, and Frameworks", generation: 2, active: 0, text: ""}),
+            ({id: "Java", parent: "Languages, Libraries, and Frameworks", generation: 2, active: 0, text: ""}),
+            ({id: "C++", parent: "Languages, Libraries, and Frameworks", generation: 2, active: 0, text: ""}),
+            ({id: "D3", parent: "Javascript", generation: 3, active: 0, text: ""}),
+            ({id: "React", parent: "Javascript", generation: 3, active: 0, text: ""}),
+            ({id: "Docker", parent: "Languages, Libraries, and Frameworks", generation: 2, active: 0, text: ""}),
+            ({id: "Tensorflow", parent: "Python", generation: 3, active: 0, text: ""}),
+            ({id: "pytorch", parent: "Python", generation: 3, active: 0, text: ""}),
+            ({id: "scikit-learn", parent: "Python", generation: 3, active: 0, text: ""}),
+            ({id: "Seaborn", parent: "Python", generation: 3, active: 0, text: ""}),
+            ({id: "Flask", parent: "Python", generation: 3, active: 0, text: ""}),
+            ({id: "MLOps", parent: "Concepts", generation: 3, active: 0, text: ""}),
+            ({id: "Distributed Computing", parent: "Concepts", generation: 3, active: 0, text: ""}),
+            ({id: "Machine Learning", parent: "Concepts", generation: 3, active: 0, text: ""}),
+            ({id: "Web Development", parent: "Concepts", generation: 3, active: 0, text: ""}),
+            ({id: "Data Engineering", parent: "Concepts", generation: 3, active: 0, text: ""}),
+            ({id: "Data Visualization", parent: "Concepts", generation: 3, active: 0, text: ""}),
+            ({id: "Computer Vision", parent: "Concepts", generation: 3, active: 0, text: ""}),
+            ({id: "Natural Language Processing", parent: "Concepts", generation: 3, active: 0, text: ""}),
+            ({id: "COLSA", parent: "Work Experience", generation: 2, active: 0, text: ""}),
+            ({id: "Data Science Intern", parent: "COLSA", generation: 2, active: 0, text: "June-July 2021<br> - Developed and presented on Physics Informed Neural Networks (PINNs).<br> - Modeled complex systems and demonstrated application for environments with low fidelity measurements"}),
+            ({id: "Data Scientist", parent: "COLSA", generation: 2, active: 0, text: "August 2021-January 2022<br> - Built and maintained CI/CD Pipeline using GitLab/MLFlow, managing model lifecycle from experimentation to deployment<br> - Presented to stakeholders<br> - Developed and integrated models through full machine learning lifecycle"}),
+            ({id: "Lead Data Scientist", parent: "COLSA", generation: 2, active: 0, text: "January 2022-Present<br> - Continued Data Scientist responsibilities<br> - Managed tasking for team of Data Scientists, Analysts, and Software Engineers for Machine Learning product"})
+        ],
+        links: [
+            ({source: "Tyrnan Prasad", target: "Skills", value: 1, active: 0}),
+            ({source: "Tyrnan Prasad", target: "Education", value: 1, active: 0}),
+            ({source: "Tyrnan Prasad", target: "Contact Information", value: 1, active: 0}),
+            ({source: "Tyrnan Prasad", target: "Work Experience", value: 1, active: 0}),
+            ({source: "Education", target: "University of Virginia", value: 1, active: 0}),
+            ({source: "Education", target: "University of California, Berkeley", value: 1, active: 0}),
+            ({source: "Contact Information", target: "Phone Number", value: 1, active: 0}),
+            ({source: "Contact Information", target: "E-Mail Address", value: 1, active: 0}),
+            ({source: "Work Experience", target: "COLSA", value: 1, active: 0}),
+            ({source: "COLSA", target: "Data Science Intern", value: 1, active: 0}),
+            ({source: "COLSA", target: "Data Scientist", value: 1, active: 0}),
+            ({source: "COLSA", target: "Lead Data Scientist", value: 1, active: 0}),
+            ({source: "Skills", target: "Languages, Libraries, and Frameworks", value: 1, active: 0}),
+            ({source: "Skills", target: "Concepts", value: 1, active: 0}),
+            ({source: "Languages, Libraries, and Frameworks", target: "Javascript", value: 1, active: 0}),
+            ({source: "Languages, Libraries, and Frameworks", target: "Python", value: 1, active: 0}),
+            ({source: "Languages, Libraries, and Frameworks", target: "Java", value: 1, active: 0}),
+            ({source: "Languages, Libraries, and Frameworks", target: "C++", value: 1, active: 0}),
+            ({source: "Languages, Libraries, and Frameworks", target: "Docker", value: 1, active: 0}),
+            ({source: "Javascript", target: "D3", value: 1, active: 0}),
+            ({source: "Javascript", target: "React", value: 1, active: 0}),
+            ({source: "Python", target: "Tensorflow", value: 1, active: 0}),
+            ({source: "Python", target: "scikit-learn", value: 1, active: 0}),
+            ({source: "Python", target: "Seaborn", value: 1, active: 0}),
+            ({source: "Python", target: "pytorch", value: 1, active: 0}),
+            ({source: "Python", target: "Seaborn", value: 1, active: 0}),
+            ({source: "Python", target: "Flask", value: 1, active: 0}),
+            ({source: "Concepts", target: "MLOps", value: 1, active: 0}),
+            ({source: "Concepts", target: "Distributed Computing", value: 1, active: 0}),
+            ({source: "Concepts", target: "Web Development", value: 1, active: 0}),
+            ({source: "Web Development", target: "React", value: 1, active: 0}),
+            ({source: "Web Development", target: "Flask", value: 1, active: 0}),
+            ({source: "Concepts", target: "Machine Learning", value: 1, active: 0}),
+            ({source: "Concepts", target: "Data Engineering", value: 1, active: 0}),
+            ({source: "Concepts", target: "Data Visualization", value: 1, active: 0}),
+            ({source: "Concepts", target: "Computer Vision", value: 1, active: 0}),
+            ({source: "Machine Learning", target: "Tensorflow", value: 1, active: 0}),
+            ({source: "Machine Learning", target: "scikit-learn", value: 1, active: 0}),
+            ({source: "Machine Learning", target: "pytorch", value: 1, active: 0}),
+            ({source: "Concepts", target: "Natural Language Processing", value: 1, active: 0}),
+            ({source: "Data Visualization", target: "D3", value: 1, active: 0}),
+            ({source: "Data Visualization", target: "Seaborn", value: 1, active: 0}),
+            ({source: "MLOps", target: "Docker", value: 1, active: 0}),
+        ]
+    })
+    fd_graph(graph);
+</script>
